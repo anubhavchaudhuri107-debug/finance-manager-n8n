@@ -1,0 +1,188 @@
+{
+  "name": "FinanceManager-n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "finance-manager",
+        "responseMode": "responseNode"
+      },
+      "id": "Webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"body\"]}}",
+              "operation": "notEmpty"
+            }
+          ]
+        }
+      },
+      "id": "If2",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a finance command parser. Extract intent as: { type: INCOME | EXPENSE | SAVE, amount: number, name: string, month: string }"
+          },
+          {
+            "role": "user",
+            "content": "={{$json[\"body\"]}}"
+          }
+        ],
+        "jsonOutput": true
+      },
+      "id": "AI Agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAiChat",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "ADD_YOUR_CREDENTIAL_ID",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const data = item.json;\n  return {\n    json: {\n      type: data.type?.toUpperCase(),\n      amount: Number(data.amount),\n      name: data.name,\n      month: data.month\n    }\n  };\n});"
+      },
+      "id": "Normalize Command",
+      "name": "Normalize Command",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"type\"]}}",
+              "operation": "equal",
+              "value2": "INCOME"
+            }
+          ]
+        }
+      },
+      "id": "Command Router - Income",
+      "name": "Route Income",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"type\"]}}",
+              "operation": "equal",
+              "value2": "EXPENSE"
+            }
+          ]
+        }
+      },
+      "id": "Command Router - Expense",
+      "name": "Route Expense",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 350]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { status: \"SUCCESS\", message: `Income of ${$json.amount} recorded for ${$json.name}` }}];"
+      },
+      "id": "Income",
+      "name": "Income",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { status: \"SUCCESS\", message: `Expense of ${$json.amount} recorded for ${$json.name}` }}];"
+      },
+      "id": "Expense",
+      "name": "Expense",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 350]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { status: \"FAILURE\", message: \"Invalid command type\" }}];"
+      },
+      "id": "Default Failure",
+      "name": "Default Failure",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {},
+      "id": "Respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "If2", "type": "main", "index": 0 }]]
+    },
+    "If2": {
+      "main": [
+        [{ "node": "AI Agent", "type": "main", "index": 0 }],
+        [{ "node": "Default Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Agent": {
+      "main": [[{ "node": "Normalize Command", "type": "main", "index": 0 }]]
+    },
+    "Normalize Command": {
+      "main": [
+        [{ "node": "Route Income", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route Income": {
+      "main": [
+        [{ "node": "Income", "type": "main", "index": 0 }],
+        [{ "node": "Route Expense", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route Expense": {
+      "main": [
+        [{ "node": "Expense", "type": "main", "index": 0 }],
+        [{ "node": "Default Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Income": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Expense": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Default Failure": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
